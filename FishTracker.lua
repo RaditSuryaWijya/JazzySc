@@ -155,11 +155,19 @@ local function sendWebhook(fishData, dynamicStats)
     local url = getgenv().FishConfig.WebhookUrl
     if url == "" then url = DEFAULT_WEBHOOK end
 
-    local iconID = string.match(tostring(fishData.Icon), "%d+")
+    -- Validasi fishData
+    if not fishData then
+        warn("❌ fishData is nil in sendWebhook")
+        return
+    end
+    
+    local iconID = fishData.Icon and string.match(tostring(fishData.Icon), "%d+") or nil
     local realImageUrl = getRealImageUrl(iconID)
-    local playerName = LocalPlayer.DisplayName
-    local playerProfileLink = "https://www.roblox.com/users/" .. LocalPlayer.UserId .. "/profile"
-    local rarityName = RarityList[fishData.Tier] or "Unknown"
+    local playerName = (LocalPlayer and LocalPlayer.DisplayName) or "Player"
+    local playerUserId = (LocalPlayer and LocalPlayer.UserId) or 0
+    local playerProfileLink = "https://www.roblox.com/users/" .. tostring(playerUserId) .. "/profile"
+    local fishTier = fishData.Tier or 1
+    local rarityName = RarityList[fishTier] or "Unknown"
 
     -- Build embed fields sesuai format gambar
     local embedFields = {}
@@ -188,20 +196,21 @@ local function sendWebhook(fishData, dynamicStats)
         end
         table.insert(embedFields, {
             ["name"] = "Weight",
-            ["value"] = weight .. " Kg",
+            ["value"] = tostring(weight) .. " Kg",
             ["inline"] = false
         })
     end
     
-    -- Field 4: Mutation (Shiny, Big, VariantSeed)
+    -- Field 4: Mutation (Hanya Shiny, Big, atau VariantSeed - VariantId TIDAK ditampilkan)
     local mutationParts = {}
     
     if dynamicStats and type(dynamicStats) == "table" then
-        -- Prioritas: Jika ada VariantSeed, format sebagai "shiny + VariantSeed"
+        -- Prioritas 1: Jika ada VariantSeed, format sebagai "shiny + VariantSeed"
         if dynamicStats.VariantSeed then
             table.insert(mutationParts, "shiny + " .. tostring(dynamicStats.VariantSeed))
         else
-            -- Cek Shiny (boolean atau string)
+            -- Prioritas 2: Cek Shiny (boolean atau string)
+            -- Catatan: VariantId diabaikan/tidak ditampilkan
             if dynamicStats.Shiny then
                 local shinyValue = dynamicStats.Shiny
                 if type(shinyValue) == "boolean" and shinyValue == true then
@@ -213,7 +222,7 @@ local function sendWebhook(fishData, dynamicStats)
                 end
             end
             
-            -- Cek Big (boolean atau string)
+            -- Prioritas 3: Cek Big (boolean atau string)
             if dynamicStats.Big then
                 local bigValue = dynamicStats.Big
                 if type(bigValue) == "boolean" and bigValue == true then
@@ -225,6 +234,7 @@ local function sendWebhook(fishData, dynamicStats)
                 end
             end
         end
+        -- Catatan: VariantId sengaja diabaikan dan tidak ditampilkan di mutation field
     end
     
     -- Tambahkan Mutation field jika ada mutation parts
@@ -238,12 +248,18 @@ local function sendWebhook(fishData, dynamicStats)
     end
 
     -- Build description sesuai format gambar (dengan validasi untuk mencegah nil concatenation)
-    local fishName = fishData.Name or "Unknown Fish"
+    local fishName = (fishData.Name and tostring(fishData.Name)) or "Unknown Fish"
     local description
+    -- Pastikan semua variabel tidak nil sebelum concatenation
+    playerName = tostring(playerName or "Player")
+    fishName = tostring(fishName or "Unknown Fish")
+    rarityName = tostring(rarityName or "Unknown")
+    
     if weight then
-        description = (playerName or "Player") .. " You have obtained a new fish! **" .. fishName .. "** with rarity " .. rarityName .. " and weight " .. weight .. " Kg"
+        weight = tostring(weight)
+        description = playerName .. " You have obtained a new fish! **" .. fishName .. "** with rarity " .. rarityName .. " and weight " .. weight .. " Kg"
     else
-        description = (playerName or "Player") .. " You have obtained a new fish! **" .. fishName .. "** with rarity " .. rarityName
+        description = playerName .. " You have obtained a new fish! **" .. fishName .. "** with rarity " .. rarityName
     end
 
     local payload = {
@@ -251,7 +267,7 @@ local function sendWebhook(fishData, dynamicStats)
         ["avatar_url"] = "https://i.imgur.com/4M7IwwP.png",
         ["embeds"] = {{
             ["description"] = description,
-            ["color"] = TierColors[fishData.Tier] or 16777215,
+            ["color"] = TierColors[fishTier] or 16777215,
             ["fields"] = embedFields,
             ["thumbnail"] = {["url"] = realImageUrl},
             ["footer"] = {["text"] = "Rayfield V12 | " .. os.date("%X")}
