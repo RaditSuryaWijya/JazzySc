@@ -72,6 +72,18 @@ MainTab:CreateToggle({
    end,
 })
 
+-- Test Webhook Button
+MainTab:CreateButton({
+   Name = "🧪 Test Webhook",
+   Callback = function()
+      if getgenv().TestWebhook then
+         getgenv().TestWebhook()
+      else
+         Rayfield:Notify({Title = "Loading...", Content = "Tunggu sebentar, fungsi sedang diinisialisasi.", Duration = 3})
+      end
+   end,
+})
+
 -- [SECTION 2: MULTI-SELECT RARITY]
 MainTab:CreateSection("Pilih Rarity (Bisa Banyak)")
 
@@ -134,30 +146,92 @@ local function sendWebhook(fishData, dynamicStats)
     local realImageUrl = getRealImageUrl(iconID)
     local playerName = LocalPlayer.DisplayName
     local playerProfileLink = "https://www.roblox.com/users/" .. LocalPlayer.UserId .. "/profile"
+    local rarityName = RarityList[fishData.Tier] or "Unknown"
 
-    local embedFields = {{["name"]="💎 Rarity", ["value"]=RarityList[fishData.Tier] or "Unknown", ["inline"]=true}}
-
+    -- Build embed fields sesuai format gambar
+    local embedFields = {}
+    
+    -- Field 1: Fish Name
+    table.insert(embedFields, {
+        ["name"] = "Fish Name",
+        ["value"] = fishData.Name,
+        ["inline"] = false
+    })
+    
+    -- Field 2: Fish Tier
+    table.insert(embedFields, {
+        ["name"] = "Fish Tier",
+        ["value"] = rarityName,
+        ["inline"] = false
+    })
+    
+    -- Field 3: Weight (jika ada)
+    if dynamicStats and type(dynamicStats) == "table" and dynamicStats.Weight then
+        local weight = tostring(dynamicStats.Weight)
+        -- Format weight dengan 2 desimal jika perlu
+        if tonumber(weight) then
+            weight = string.format("%.2f", tonumber(weight))
+        end
+        table.insert(embedFields, {
+            ["name"] = "Weight",
+            ["value"] = weight .. " Kg",
+            ["inline"] = false
+        })
+    end
+    
+    -- Field 4: Mutation (Shiny, Big, VariantSeed)
+    local mutationParts = {}
+    
     if dynamicStats and type(dynamicStats) == "table" then
-        for k, v in pairs(dynamicStats) do
-            if k ~= "VariantSeed" then
-                local t, val, icon = k, tostring(v), "🔹"
-                if k == "VariantId" then t, icon = "Mutation", "🧬" end
-                if k == "Weight" then t, val, icon = "Weight", val.." kg", "⚖️" end
-                if string.find(k, "Shiny") then icon = "✨" end
-                if string.find(k, "Big") then icon = "🐳" end
-                table.insert(embedFields, {["name"]=icon.." "..t, ["value"]="**"..val.."**", ["inline"]=true})
+        -- Prioritas: Jika ada VariantSeed, format sebagai "shiny + VariantSeed"
+        if dynamicStats.VariantSeed then
+            table.insert(mutationParts, "shiny + " .. tostring(dynamicStats.VariantSeed))
+        else
+            -- Cek Shiny (boolean atau string)
+            if dynamicStats.Shiny then
+                local shinyValue = dynamicStats.Shiny
+                if type(shinyValue) == "boolean" and shinyValue == true then
+                    table.insert(mutationParts, "Shiny")
+                elseif type(shinyValue) == "string" and shinyValue ~= "" then
+                    table.insert(mutationParts, shinyValue)
+                elseif type(shinyValue) ~= "boolean" and shinyValue then
+                    table.insert(mutationParts, tostring(shinyValue))
+                end
+            end
+            
+            -- Cek Big (boolean atau string)
+            if dynamicStats.Big then
+                local bigValue = dynamicStats.Big
+                if type(bigValue) == "boolean" and bigValue == true then
+                    table.insert(mutationParts, "Big")
+                elseif type(bigValue) == "string" and bigValue ~= "" then
+                    table.insert(mutationParts, bigValue)
+                elseif type(bigValue) ~= "boolean" and bigValue then
+                    table.insert(mutationParts, tostring(bigValue))
+                end
             end
         end
     end
+    
+    -- Tambahkan Mutation field jika ada mutation parts
+    if #mutationParts > 0 then
+        local mutationValue = table.concat(mutationParts, ", ")
+        table.insert(embedFields, {
+            ["name"] = "Mutation",
+            ["value"] = mutationValue,
+            ["inline"] = false
+        })
+    end
+
+    -- Build description sesuai format gambar: "{PlayerName} You have obtained a new **{Rarity}** fish!"
+    local description = playerName .. " You have obtained a new fish! **" .. fishData.Name .. "** with rarity " .. rarityName .. " and weight " .. weight .. " Kg"
 
     local payload = {
         ["username"] = "Fish Tracker V12",
         ["avatar_url"] = "https://i.imgur.com/4M7IwwP.png",
         ["embeds"] = {{
-            ["title"] = "🎣 Ikan Baru Ditangkap!",
-            ["description"] = "**" .. fishData.Name .. "** berhasil diamankan.",
+            ["description"] = description,
             ["color"] = TierColors[fishData.Tier] or 16777215,
-            ["author"] = {["name"] = "Player: " .. playerName, ["url"] = playerProfileLink},
             ["fields"] = embedFields,
             ["thumbnail"] = {["url"] = realImageUrl},
             ["footer"] = {["text"] = "Rayfield V12 | " .. os.date("%X")}
@@ -171,6 +245,102 @@ local function sendWebhook(fishData, dynamicStats)
         Body = HttpService:JSONEncode(payload)
     })
 end
+
+-- Test Webhook Function (bypass master switch)
+local function testWebhook()
+    local url = getgenv().FishConfig.WebhookUrl
+    if url == "" then url = DEFAULT_WEBHOOK end
+    
+    if not url or url == "" then
+        Rayfield:Notify({Title = "Error", Content = "Webhook URL kosong! Masukkan webhook URL terlebih dahulu.", Duration = 5})
+        return
+    end
+    
+    -- Data dummy untuk test
+    local testFishData = {
+        Name = "Test Fish",
+        Tier = 4,  -- Epic
+        Icon = "rbxassetid://0"  -- Dummy icon
+    }
+    
+    local testDynamicStats = {
+        Weight = 24.60,
+        Shiny = true,
+        VariantSeed = 12345
+    }
+    
+    local playerName = LocalPlayer.DisplayName
+    local rarityName = RarityList[testFishData.Tier] or "Unknown"
+    local iconID = string.match(tostring(testFishData.Icon), "%d+")
+    local realImageUrl = getRealImageUrl(iconID)
+    
+    -- Build embed fields
+    local embedFields = {}
+    
+    -- Field 1: Fish Name
+    table.insert(embedFields, {
+        ["name"] = "Fish Name",
+        ["value"] = testFishData.Name,
+        ["inline"] = false
+    })
+    
+    -- Field 2: Fish Tier
+    table.insert(embedFields, {
+        ["name"] = "Fish Tier",
+        ["value"] = rarityName,
+        ["inline"] = false
+    })
+    
+    -- Field 3: Weight
+    local weight = string.format("%.2f", testDynamicStats.Weight)
+    table.insert(embedFields, {
+        ["name"] = "Weight",
+        ["value"] = weight .. " Kg",
+        ["inline"] = false
+    })
+    
+    -- Field 4: Mutation
+    local mutationValue = "shiny + " .. tostring(testDynamicStats.VariantSeed)
+    table.insert(embedFields, {
+        ["name"] = "Mutation",
+        ["value"] = mutationValue,
+        ["inline"] = false
+    })
+    
+    -- Build description
+    local description = playerName .. " You have obtained a new fish! **" .. testFishData.Name .. "** with rarity " .. rarityName .. " and weight " .. weight .. " Kg"
+    
+    local payload = {
+        ["username"] = "Fish Tracker V12 [TEST]",
+        ["avatar_url"] = "https://i.imgur.com/4M7IwwP.png",
+        ["embeds"] = {{
+            ["description"] = description,
+            ["color"] = TierColors[testFishData.Tier] or 16777215,
+            ["fields"] = embedFields,
+            ["thumbnail"] = {["url"] = realImageUrl},
+            ["footer"] = {["text"] = "Rayfield V12 | TEST | " .. os.date("%X")}
+        }}
+    }
+    
+    -- Send test webhook
+    local success, response = pcall(function()
+        return httpRequest({
+            Url = url,
+            Method = "POST",
+            Headers = {["Content-Type"]="application/json"},
+            Body = HttpService:JSONEncode(payload)
+        })
+    end)
+    
+    if success then
+        Rayfield:Notify({Title = "Success", Content = "Test webhook berhasil dikirim! Cek Discord webhook Anda.", Duration = 5})
+    else
+        Rayfield:Notify({Title = "Error", Content = "Gagal mengirim test webhook: " .. tostring(response), Duration = 5})
+    end
+end
+
+-- Expose test function to global untuk bisa dipanggil dari button
+getgenv().TestWebhook = testWebhook
 
 -- Listener
 local function getRemote(name)
