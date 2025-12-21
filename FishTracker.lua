@@ -6,6 +6,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local HttpService = game:GetService("HttpService")
 local Players = game:GetService("Players")
 local LocalPlayer = Players.LocalPlayer
+local VirtualUser = game:GetService("VirtualUser")
 
 -- ====================================================
 -- 1. KONFIGURASI GLOBAL
@@ -13,6 +14,7 @@ local LocalPlayer = Players.LocalPlayer
 getgenv().FishConfig = {
     Active = false,
     WebhookUrl = "", 
+    AntiAFK = false,
     -- Filter Multi-Select (Default: Rare ke atas Nyala)
     RarityFilter = {
         [1] = false, -- Common
@@ -84,7 +86,18 @@ MainTab:CreateButton({
    end,
 })
 
--- [SECTION 2: MULTI-SELECT RARITY]
+-- [SECTION 2: ANTI-AFK]
+MainTab:CreateSection("Anti-AFK")
+MainTab:CreateToggle({
+   Name = "🔄 Anti-AFK (ON/OFF)",
+   CurrentValue = false,
+   Flag = "AntiAFK",
+   Callback = function(Value)
+      getgenv().FishConfig.AntiAFK = Value
+   end,
+})
+
+-- [SECTION 3: MULTI-SELECT RARITY]
 MainTab:CreateSection("Pilih Rarity (Bisa Banyak)")
 
 -- Loop membuat tombol untuk setiap Rarity
@@ -151,10 +164,10 @@ local function sendWebhook(fishData, dynamicStats)
     -- Build embed fields sesuai format gambar
     local embedFields = {}
     
-    -- Field 1: Fish Name
+    -- Field 1: Fish Name (dengan validasi)
     table.insert(embedFields, {
         ["name"] = "Fish Name",
-        ["value"] = fishData.Name,
+        ["value"] = fishData.Name or "Unknown Fish",
         ["inline"] = false
     })
     
@@ -224,12 +237,13 @@ local function sendWebhook(fishData, dynamicStats)
         })
     end
 
-    -- Build description sesuai format gambar
+    -- Build description sesuai format gambar (dengan validasi untuk mencegah nil concatenation)
+    local fishName = fishData.Name or "Unknown Fish"
     local description
     if weight then
-        description = playerName .. " You have obtained a new fish! **" .. fishData.Name .. "** with rarity " .. rarityName .. " and weight " .. weight .. " Kg"
+        description = (playerName or "Player") .. " You have obtained a new fish! **" .. fishName .. "** with rarity " .. rarityName .. " and weight " .. weight .. " Kg"
     else
-        description = playerName .. " You have obtained a new fish! **" .. fishData.Name .. "** with rarity " .. rarityName
+        description = (playerName or "Player") .. " You have obtained a new fish! **" .. fishName .. "** with rarity " .. rarityName
     end
 
     local payload = {
@@ -386,3 +400,31 @@ if remote then
         end
     end)
 end
+
+-- ====================================================
+-- 4. ANTI-AFK SYSTEM
+-- ====================================================
+local function setupAntiAFK()
+    -- Connect to Idled event untuk trigger anti-AFK
+    LocalPlayer.Idled:Connect(function()
+        if getgenv().FishConfig.AntiAFK then
+            VirtualUser:CaptureController()
+            VirtualUser:ClickButton2(Vector2.new())
+        end
+    end)
+    
+    -- Also setup periodic check untuk lebih reliable
+    spawn(function()
+        while wait(20) do -- Check setiap 20 detik
+            if getgenv().FishConfig.AntiAFK then
+                pcall(function()
+                    VirtualUser:CaptureController()
+                    VirtualUser:ClickButton2(Vector2.new())
+                end)
+            end
+        end
+    end)
+end
+
+-- Initialize Anti-AFK
+setupAntiAFK()
