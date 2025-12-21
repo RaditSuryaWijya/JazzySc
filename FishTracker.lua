@@ -36,8 +36,8 @@ local RarityList = {"Common", "Uncommon", "Rare", "Epic", "Legendary", "Mythic",
 -- ====================================================
 local Window = Rayfield:CreateWindow({
    Name = "Fish Tracker V12+ 🎣",
-   LoadingTitle = "Original V12 + Features",
-   LoadingSubtitle = "by Gemini",
+   LoadingTitle = "FishTrackerV12Plus",
+   LoadingSubtitle = "by Jazzy",
    ConfigurationSaving = {
       Enabled = true,
       FolderName = "FishTrackerV12Plus",
@@ -219,7 +219,7 @@ local function sendWebhook(fishData, dynamicStats)
         ["avatar_url"] = "https://i.imgur.com/4M7IwwP.png",
         ["embeds"] = {{
             ["title"] = "🎣 Ikan Baru Ditangkap!",
-            ["description"] = "**" .. fishData.Name .. "** berhasil diamankan.",
+            ["description"] = "**" .. fishData.Name .. "** Sudah Di Tas.",
             ["color"] = TierColors[fishData.Tier] or 16777215,
             ["author"] = {["name"] = "Player: " .. playerName, ["url"] = playerProfileLink},
             ["fields"] = embedFields,
