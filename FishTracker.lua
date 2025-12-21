@@ -176,7 +176,7 @@ end
 -- Database Builder
 local FishDatabase = {} 
 local ItemsFolder = ReplicatedStorage:WaitForChild("Items")
-local TierColors = {[1]=16777215, [2]=65280, [3]=255, [4]=10181046, [5]=16766720, [6]=16711680, [7]=0}
+local TierColors = {[1]=16777215, [2]=65280, [3]=255, [4]=10181046, [5]=16766720, [6]=16711680, [7]=65450}
 
 for _, module in pairs(ItemsFolder:GetChildren()) do
     if module:IsA("ModuleScript") then
