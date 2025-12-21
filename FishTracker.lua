@@ -166,8 +166,9 @@ local function sendWebhook(fishData, dynamicStats)
     })
     
     -- Field 3: Weight (jika ada)
+    local weight = nil
     if dynamicStats and type(dynamicStats) == "table" and dynamicStats.Weight then
-        local weight = tostring(dynamicStats.Weight)
+        weight = tostring(dynamicStats.Weight)
         -- Format weight dengan 2 desimal jika perlu
         if tonumber(weight) then
             weight = string.format("%.2f", tonumber(weight))
@@ -223,8 +224,13 @@ local function sendWebhook(fishData, dynamicStats)
         })
     end
 
-    -- Build description sesuai format gambar: "{PlayerName} You have obtained a new **{Rarity}** fish!"
-    local description = playerName .. " You have obtained a new fish! **" .. fishData.Name .. "** with rarity " .. rarityName .. " and weight " .. weight .. " Kg"
+    -- Build description sesuai format gambar
+    local description
+    if weight then
+        description = playerName .. " You have obtained a new fish! **" .. fishData.Name .. "** with rarity " .. rarityName .. " and weight " .. weight .. " Kg"
+    else
+        description = playerName .. " You have obtained a new fish! **" .. fishData.Name .. "** with rarity " .. rarityName
+    end
 
     local payload = {
         ["username"] = "Fish Tracker V12",
