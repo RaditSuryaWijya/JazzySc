@@ -1,18 +1,21 @@
--- [[ FISH NOTIFIER V12: MULTI-SELECT FILTER ]]
--- Fitur: Pilih banyak rarity secara spesifik menggunakan Toggle (Centang)
+-- [[ FISH NOTIFIER V12: PLUS FEATURES ]]
+-- Fitur: Kode Asli V12 + Anti-AFK + Sell All + Test Button.
 
 local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local HttpService = game:GetService("HttpService")
 local Players = game:GetService("Players")
 local LocalPlayer = Players.LocalPlayer
+local VirtualUser = game:GetService("VirtualUser") -- Ditambahkan untuk Anti-AFK
 
 -- ====================================================
--- 1. KONFIGURASI GLOBAL
+-- 1. KONFIGURASI GLOBAL (DITAMBAH OPSI BARU)
 -- ====================================================
 getgenv().FishConfig = {
     Active = false,
     WebhookUrl = "", 
+    AntiAFK = false, -- Baru
+    AutoSell = false, -- Baru
     -- Filter Multi-Select (Default: Rare ke atas Nyala)
     RarityFilter = {
         [1] = false, -- Common
@@ -32,12 +35,12 @@ local RarityList = {"Common", "Uncommon", "Rare", "Epic", "Legendary", "Mythic",
 -- 2. SETUP GUI (RAYFIELD)
 -- ====================================================
 local Window = Rayfield:CreateWindow({
-   Name = "Fish Tracker V12 🎣",
-   LoadingTitle = "Fish Tracker Multi-Select",
+   Name = "Fish Tracker V12+ 🎣",
+   LoadingTitle = "Original V12 + Features",
    LoadingSubtitle = "by Gemini",
    ConfigurationSaving = {
       Enabled = true,
-      FolderName = "FishTrackerV12",
+      FolderName = "FishTrackerV12Plus",
       FileName = "Config"
    },
    Discord = { Enabled = false },
@@ -45,6 +48,7 @@ local Window = Rayfield:CreateWindow({
 })
 
 local MainTab = Window:CreateTab("Dashboard", 4483345998)
+local UtilTab = Window:CreateTab("Utilities", 4483345998) -- Tab Baru
 
 -- [SECTION 1: WEBHOOK & MASTER SWITCH]
 MainTab:CreateParagraph({Title = "Status", Content = "Masukkan Webhook & Centang Rarity yang diinginkan."})
@@ -72,6 +76,14 @@ MainTab:CreateToggle({
    end,
 })
 
+-- [FITUR BARU: TEST BUTTON]
+MainTab:CreateButton({
+   Name = "🧪 Test Webhook (Klik Ini)",
+   Callback = function() 
+      if getgenv().TestWebhook then getgenv().TestWebhook() end 
+   end,
+})
+
 -- [SECTION 2: MULTI-SELECT RARITY]
 MainTab:CreateSection("Pilih Rarity (Bisa Banyak)")
 
@@ -83,10 +95,47 @@ for i, rarityName in ipairs(RarityList) do
        Flag = "Filter_" .. rarityName, 
        Callback = function(Value)
           getgenv().FishConfig.RarityFilter[i] = Value
-          -- print("Filter update: " .. rarityName .. " = " .. tostring(Value))
        end,
     })
 end
+
+-- ====================================================
+-- [TAB UTILITIES: FITUR TAMBAHAN]
+-- ====================================================
+
+-- [FITUR BARU: SELL ALL]
+UtilTab:CreateSection("Selling System")
+
+UtilTab:CreateButton({
+   Name = "💰 Jual Semua Ikan (Sell All)",
+   Callback = function()
+      if getgenv().SellAllFish then getgenv().SellAllFish() end
+   end,
+})
+
+UtilTab:CreateToggle({
+   Name = "Auto-Sell (Jual otomatis saat dapat ikan)",
+   CurrentValue = false,
+   Flag = "AutoSell",
+   Callback = function(Value)
+      getgenv().FishConfig.AutoSell = Value
+   end,
+})
+
+-- [FITUR BARU: ANTI-AFK]
+UtilTab:CreateSection("AFK System")
+
+UtilTab:CreateToggle({
+   Name = "🔄 Anti-AFK (Biar gak dikick)",
+   CurrentValue = false,
+   Flag = "AntiAFK",
+   Callback = function(Value)
+       getgenv().FishConfig.AntiAFK = Value
+       if Value then
+           Rayfield:Notify({Title="Anti-AFK", Content="Aktif!", Duration=3})
+       end
+   end,
+})
 
 -- ====================================================
 -- 3. LOGIKA SISTEM (BACKEND)
@@ -95,6 +144,21 @@ local httpRequest = (syn and syn.request) or (http and http.request) or http_req
 if not httpRequest then 
     Rayfield:Notify({Title = "Error", Content = "Executor tidak support HTTP!", Duration = 5})
     return 
+end
+
+-- Helper: Remote Finder (Diupdate sedikit agar bisa cari RF/SellAllItems)
+local function getRemote(name)
+    local index = ReplicatedStorage:WaitForChild("Packages"):WaitForChild("_Index", 5)
+    if not index then return nil end
+    for _, child in pairs(index:GetChildren()) do
+        if string.find(child.Name, "sleitnick_net") then
+            local net = child:FindFirstChild("net")
+            -- Cari Remote (Bisa RF atau RE)
+            local found = net:FindFirstChild(name) or net:FindFirstChild(string.gsub(name, "/", "."))
+            if found then return found end
+        end
+    end
+    return nil
 end
 
 -- Helper: Get Real Image
@@ -124,7 +188,7 @@ for _, module in pairs(ItemsFolder:GetChildren()) do
     end
 end
 
--- Sender Function
+-- [FUNGSI ASLI V12 - TIDAK DIUBAH SAMA SEKALI]
 local function sendWebhook(fishData, dynamicStats)
     if not getgenv().FishConfig.Active then return end
     local url = getgenv().FishConfig.WebhookUrl
@@ -172,39 +236,70 @@ local function sendWebhook(fishData, dynamicStats)
     })
 end
 
--- Listener
-local function getRemote(name)
-    local index = ReplicatedStorage:WaitForChild("Packages"):WaitForChild("_Index", 5)
-    if not index then return nil end
-    for _, child in pairs(index:GetChildren()) do
-        if string.find(child.Name, "sleitnick_net") then
-            local net = child:FindFirstChild("net")
-            return net and (net:FindFirstChild(name) or net:FindFirstChild(string.gsub(name, "/", ".")))
-        end
+-- ====================================================
+-- 4. FUNGSI TAMBAHAN (DI LUAR WEBHOOK)
+-- ====================================================
+
+-- [Fungsi Sell All]
+getgenv().SellAllFish = function()
+    local sellRemote = getRemote("RF/SellAllItems")
+    if sellRemote then
+        sellRemote:InvokeServer()
+        Rayfield:Notify({Title = "💰 Sold!", Content = "Semua ikan berhasil dijual.", Duration = 3})
+    else
+        Rayfield:Notify({Title = "Error", Content = "Remote SellAllItems tidak ketemu!", Duration = 5})
     end
-    return nil
 end
 
+-- [Fungsi Test Webhook]
+getgenv().TestWebhook = function()
+    local testData = {Name="Test Fish V12", Tier=4, Icon="rbxassetid://0"}
+    local testStats = {Weight=99.9, VariantId="Dark"} -- Simulasi data V12
+    Rayfield:Notify({Title="Testing...", Content="Mengirim data test...", Duration=3})
+    sendWebhook(testData, testStats)
+end
+
+-- [Fungsi Anti-AFK]
+local function setupAntiAFK()
+    LocalPlayer.Idled:Connect(function()
+        if getgenv().FishConfig.AntiAFK then
+            VirtualUser:CaptureController()
+            VirtualUser:ClickButton2(Vector2.new())
+        end
+    end)
+    spawn(function()
+        while wait(60) do 
+            if getgenv().FishConfig.AntiAFK then
+                pcall(function() VirtualUser:CaptureController(); VirtualUser:ClickButton2(Vector2.new()) end)
+            end
+        end
+    end)
+end
+setupAntiAFK()
+
+
+-- Listener (Ditambah logika Auto-Sell)
 local remote = getRemote("RE/ObtainedNewFishNotification")
 
 if remote then
     Rayfield:Notify({Title = "Tracker Siap", Content = "Menu V12 Aktif (Multi-Select)", Duration = 5})
     
     remote.OnClientEvent:Connect(function(...)
-        -- Cek Master Switch
-        if not getgenv().FishConfig.Active then return end
-
         local args = {...}
         local arg1, arg2 = args[1], args[2]
         
         if type(arg1) == "number" then
             local info = FishDatabase[arg1]
             if info then
-                -- [[ LOGIKA FILTER BARU (MULTI-SELECT) ]]
-                -- Cek apakah Rarity ikan ini dicentang (True) di Config
-                if getgenv().FishConfig.RarityFilter[info.Tier] == true then
+                -- 1. KIRIM WEBHOOK (V12 Logic)
+                if getgenv().FishConfig.Active and getgenv().FishConfig.RarityFilter[info.Tier] == true then
                     local stats = (type(arg2) == "table" and arg2) or {}
                     sendWebhook(info, stats)
+                end
+                
+                -- 2. AUTO-SELL (Fitur Tambahan)
+                if getgenv().FishConfig.AutoSell then
+                    getgenv().SellAllFish()
                 end
             end
         end
