@@ -1,12 +1,12 @@
--- [[ FISH NOTIFIER V15: SMART IDLE SYSTEM ]]
--- Fitur: V14 + Validasi Input (Tidak warning jika player aktif bergerak/klik)
+-- [[ FISH NOTIFIER V16.5: NO SEED ]]
+-- Fitur: Crash Detector + Smart Idle + No Emojis + No Seed Number
 
 local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local HttpService = game:GetService("HttpService")
 local Players = game:GetService("Players")
-local RunService = game:GetService("RunService")
-local UserInputService = game:GetService("UserInputService") -- Service Baru
+local GuiService = game:GetService("GuiService")
+local UserInputService = game:GetService("UserInputService")
 local LocalPlayer = Players.LocalPlayer
 local VirtualUser = game:GetService("VirtualUser")
 
@@ -18,76 +18,67 @@ getgenv().FishConfig = {
     WebhookUrl = "", 
     AntiAFK = false,
     AutoSell = false,
-    -- Config Monitoring Smart
-    LastCatchTime = tick(), -- Waktu terakhir dapat ikan
-    LastInputTime = tick(), -- Waktu terakhir player gerak/klik
+    -- Config Monitoring
+    LastCatchTime = tick(),
+    LastInputTime = tick(),
     IdleWarningSent = false,
-    -- Filter Multi-Select
-    RarityFilter = {
-        [1] = false, [2] = false, 
-        [3] = true,  [4] = true,  
-        [5] = true,  [6] = true, [7] = true
-    }
+    HeartbeatInterval = 600, 
+    RarityFilter = { [1]=false, [2]=false, [3]=true, [4]=true, [5]=true, [6]=true, [7]=true }
 }
 
 local DEFAULT_WEBHOOK = "https://discord.com/api/webhooks/1451390752054841376/FT_84n6GyaPJQ06T_7Nv8T8E1rEWcgGwIgycywysRUsA4Az7bKbhPuBZs5zKqXo2KJVJ"
 local RarityList = {"Common", "Uncommon", "Rare", "Epic", "Legendary", "Mythic", "SECRET"}
 
 -- ====================================================
--- 2. DETEKSI INPUT (WASD & KLIK)
--- ====================================================
--- Fungsi ini akan mereset timer "LastInputTime" setiap kamu menekan tombol/klik
-UserInputService.InputBegan:Connect(function(input, gameProcessed)
-    local inputType = input.UserInputType
-    local keyCode = input.KeyCode
-
-    -- Cek Mouse Click (Kiri/Kanan)
-    if inputType == Enum.UserInputType.MouseButton1 or inputType == Enum.UserInputType.MouseButton2 then
-        getgenv().FishConfig.LastInputTime = tick()
-    end
-
-    -- Cek Keyboard (WASD, Spasi, Panah, dll)
-    if inputType == Enum.UserInputType.Keyboard then
-        -- Kita update waktu interaksi apapun tombolnya (indikasi user aktif)
-        getgenv().FishConfig.LastInputTime = tick()
-    end
-end)
-
--- ====================================================
--- 3. SETUP HTTP & SYSTEM NOTIFICATION
+-- 2. SYSTEM NOTIFICATION
 -- ====================================================
 local httpRequest = (syn and syn.request) or (http and http.request) or http_request or (fluxus and fluxus.request) or request
-if not httpRequest then 
-    Rayfield:Notify({Title = "Error", Content = "Executor tidak support HTTP!", Duration = 5})
-    return 
-end
+if not httpRequest then return end
 
 local function sendSystemWebhook(title, message, color)
     local url = getgenv().FishConfig.WebhookUrl
     if url == "" then url = DEFAULT_WEBHOOK end
     
     local payload = {
-        ["username"] = "Fish Monitor V15",
+        ["username"] = "Fish Monitor V16",
         ["avatar_url"] = "https://i.imgur.com/4M7IwwP.png",
         ["embeds"] = {{
             ["title"] = title,
             ["description"] = message,
             ["color"] = color, 
-            ["footer"] = {["text"] = "Smart Monitor | " .. os.date("%X")}
+            ["footer"] = {["text"] = "System Monitor | " .. os.date("%X")}
         }}
     }
-    
-    httpRequest({Url = url, Method = "POST", Headers = {["Content-Type"]="application/json"}, Body = HttpService:JSONEncode(payload)})
+    pcall(function()
+        httpRequest({Url = url, Method = "POST", Headers = {["Content-Type"]="application/json"}, Body = HttpService:JSONEncode(payload)})
+    end)
 end
 
 -- ====================================================
--- 4. SETUP GUI (RAYFIELD)
+-- 3. CRASH & INPUT DETECTOR
+-- ====================================================
+GuiService.ErrorMessageChanged:Connect(function()
+    local errorMsg = GuiService:GetErrorMessage()
+    if errorMsg and errorMsg ~= "" and getgenv().FishConfig.Active then
+        sendSystemWebhook("🚨 CRASH DETECTED", "**Error:** " .. errorMsg .. "\nScript mendeteksi layar error.", 16711680)
+        wait(1) 
+    end
+end)
+
+UserInputService.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Keyboard then
+        getgenv().FishConfig.LastInputTime = tick()
+    end
+end)
+
+-- ====================================================
+-- 4. GUI SETUP
 -- ====================================================
 local Window = Rayfield:CreateWindow({
-   Name = "Fish Tracker V15 🎣",
-   LoadingTitle = "Smart Idle System",
+   Name = "Fish Tracker V16.5 🎣",
+   LoadingTitle = "No Seed Ver.",
    LoadingSubtitle = "by Jazzy",
-   ConfigurationSaving = { Enabled = true, FolderName = "FishTrackerV15", FileName = "Config" },
+   ConfigurationSaving = { Enabled = true, FolderName = "FishTrackerV16NoSeed", FileName = "Config" },
    Discord = { Enabled = false },
    KeySystem = false,
 })
@@ -108,16 +99,15 @@ MainTab:CreateToggle({
    Callback = function(Value)
       getgenv().FishConfig.Active = Value
       if Value then
-          -- Reset semua timer saat dinyalakan
           getgenv().FishConfig.LastCatchTime = tick()
           getgenv().FishConfig.LastInputTime = tick()
           getgenv().FishConfig.IdleWarningSent = false
-          sendSystemWebhook("🟢 SYSTEM ONLINE", "Player: **" .. LocalPlayer.DisplayName .. "** ONLINE. Smart Monitor Aktif.", 65280)
+          sendSystemWebhook("🟢 SYSTEM ONLINE", "Monitoring V16.5 (No Seed) Aktif.", 65280)
       end
    end,
 })
 
--- [RARITY SELECT]
+-- [RARITY]
 MainTab:CreateSection("Pilih Rarity")
 for i, rarityName in ipairs(RarityList) do
     MainTab:CreateToggle({
@@ -127,45 +117,42 @@ for i, rarityName in ipairs(RarityList) do
 end
 
 -- [UTILITIES]
-UtilTab:CreateSection("Selling & AFK")
-UtilTab:CreateButton({Name = "💰 Jual Semua (Sell All)", Callback = function() if getgenv().SellAllFish then getgenv().SellAllFish() end end})
+UtilTab:CreateSection("Features")
+UtilTab:CreateButton({Name = "💰 Jual Semua", Callback = function() if getgenv().SellAllFish then getgenv().SellAllFish() end end})
 UtilTab:CreateToggle({Name = "Auto-Sell", CurrentValue = false, Flag = "AutoSell", Callback = function(Value) getgenv().FishConfig.AutoSell = Value end})
 UtilTab:CreateToggle({Name = "🔄 Anti-AFK", CurrentValue = false, Flag = "AntiAFK", Callback = function(Value) getgenv().FishConfig.AntiAFK = Value end})
 
--- ====================================================
--- 5. LOGIKA MONITORING (SMART CHECK)
--- ====================================================
+UtilTab:CreateSection("Heartbeat")
+UtilTab:CreateToggle({
+   Name = "💓 Kirim Status Tiap 10 Menit", CurrentValue = false, Flag = "Heartbeat",
+   Callback = function(Value) 
+       getgenv().FishConfig.HeartbeatEnabled = Value 
+       if Value then
+           spawn(function()
+               while getgenv().FishConfig.HeartbeatEnabled and wait(getgenv().FishConfig.HeartbeatInterval) do
+                   if getgenv().FishConfig.Active then
+                       sendSystemWebhook("💓 STATUS AMAN", "Akun online. Waktu: " .. os.date("%X"), 3447003)
+                   end
+               end
+           end)
+       end
+   end,
+})
 
--- Disconnect Monitor
-Players.PlayerRemoving:Connect(function(player)
-    if player == LocalPlayer and getgenv().FishConfig.Active then
-         sendSystemWebhook("🔴 SYSTEM OFFLINE", "Player: **" .. LocalPlayer.Name .. "** Disconnect/Keluar.", 16711680)
-    end
-end)
-
--- Smart Idle Checker Loop
+-- ====================================================
+-- 5. SMART IDLE MONITOR
+-- ====================================================
 spawn(function()
     while wait(5) do
         if getgenv().FishConfig.Active then
-            local currentTime = tick()
-            local timeSinceCatch = currentTime - getgenv().FishConfig.LastCatchTime
-            local timeSinceInput = currentTime - getgenv().FishConfig.LastInputTime
+            local t = tick()
+            local timeCatch = t - getgenv().FishConfig.LastCatchTime
+            local timeInput = t - getgenv().FishConfig.LastInputTime
             
-            -- LOGIKA BARU:
-            -- Kirim warning HANYA JIKA:
-            -- 1. Gak dapet ikan > 60 detik
-            -- 2. Gak ada input (WASD/Klik) > 60 detik
-            -- 3. Belum pernah kirim warning sebelumnya
-            
-            if timeSinceCatch > 60 and timeSinceInput > 60 and not getgenv().FishConfig.IdleWarningSent then
-                sendSystemWebhook(
-                    "⚠️ IDLE ALERT (BENAR-BENAR AFK)", 
-                    "Akun **" .. LocalPlayer.Name .. "** terdeteksi:\n1. Tidak dapat ikan (>1 menit)\n2. Tidak ada pergerakan mouse/keyboard (>1 menit)\n\nKemungkinan script/macro mati atau stuck.",
-                    16753920 -- Orange
-                )
+            if timeCatch > 60 and timeInput > 60 and not getgenv().FishConfig.IdleWarningSent then
+                sendSystemWebhook("⚠️ IDLE ALERT", "Tidak ada ikan & input selama >1 menit.", 16753920)
                 getgenv().FishConfig.IdleWarningSent = true 
-            elseif timeSinceInput < 60 and getgenv().FishConfig.IdleWarningSent then
-                -- (Opsional) Jika user bergerak lagi, kita bisa reset status warning agar bisa kirim lagi nanti
+            elseif timeInput < 60 and getgenv().FishConfig.IdleWarningSent then
                 getgenv().FishConfig.IdleWarningSent = false
             end
         end
@@ -173,7 +160,7 @@ spawn(function()
 end)
 
 -- ====================================================
--- 6. LOGIKA UTAMA (SAMA SEPERTI V14)
+-- 6. MAIN LOGIC (WEBHOOK)
 -- ====================================================
 local function getRemote(name)
     local index = ReplicatedStorage:WaitForChild("Packages"):WaitForChild("_Index", 5)
@@ -227,23 +214,29 @@ local function sendWebhook(fishData, dynamicStats)
 
     if dynamicStats and type(dynamicStats) == "table" then
         for k, v in pairs(dynamicStats) do
+            -- Kita filter yang tidak perlu ditampilkan sebagai stats biasa
             if k ~= "VariantSeed" and k ~= "VariantId" and k ~= "Shiny" and k ~= "Big" then
                 local t, val, icon = k, tostring(v), "🔹"
                 if k == "Weight" then t, val, icon = "Weight", val.." kg", "⚖️" end
                 table.insert(embedFields, {["name"]=icon.." "..t, ["value"]="**"..val.."**", ["inline"]=true})
             end
         end
+        
+        -- [[ LOGIKA MUTASI (TANPA SEED) ]]
         local mutParts = {}
         if dynamicStats.VariantId then table.insert(mutParts, tostring(dynamicStats.VariantId)) end
         if dynamicStats.Shiny then table.insert(mutParts, "Shiny") end
         if dynamicStats.Big then table.insert(mutParts, "Big") end
+        
+        -- Bagian VariantSeed SUDAH DIHAPUS TOTAL sesuai permintaan
+        
         if #mutParts > 0 then
             table.insert(embedFields, {["name"]="🧬 Mutation", ["value"]="**"..table.concat(mutParts, " ").."**", ["inline"]=true})
         end
     end
 
     local payload = {
-        ["username"] = "Fish Tracker V15",
+        ["username"] = "Fish Tracker V16.5",
         ["avatar_url"] = "https://i.imgur.com/4M7IwwP.png",
         ["embeds"] = {{
             ["title"] = "🎣 Ikan Baru Ditangkap!",
@@ -252,7 +245,7 @@ local function sendWebhook(fishData, dynamicStats)
             ["author"] = {["name"] = "Player: " .. playerName, ["url"] = playerProfileLink},
             ["fields"] = embedFields,
             ["thumbnail"] = {["url"] = realImageUrl},
-            ["footer"] = {["text"] = "Rayfield V15 | " .. os.date("%X")}
+            ["footer"] = {["text"] = "Rayfield V16.5 | " .. os.date("%X")}
         }}
     }
     httpRequest({Url = url, Method = "POST", Headers = {["Content-Type"]="application/json"}, Body = HttpService:JSONEncode(payload)})
@@ -265,13 +258,10 @@ end
 
 local remote = getRemote("RE/ObtainedNewFishNotification")
 if remote then
-    Rayfield:Notify({Title = "System Ready", Content = "Smart Monitor V15 Aktif", Duration = 5})
-    
+    Rayfield:Notify({Title = "System Ready", Content = "V16.5 (Clean) Loaded", Duration = 5})
     remote.OnClientEvent:Connect(function(...)
         local args = {...}
         local arg1, arg2 = args[1], args[2]
-        
-        -- Reset Idle Timer karena berhasil dapat ikan
         getgenv().FishConfig.LastCatchTime = tick()
         getgenv().FishConfig.IdleWarningSent = false 
         
