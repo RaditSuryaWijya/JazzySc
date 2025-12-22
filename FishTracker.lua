@@ -237,10 +237,6 @@ local function sendWebhook(fishData, dynamicStats)
         if dynamicStats.VariantId then table.insert(mutParts, tostring(dynamicStats.VariantId)) end
         if dynamicStats.Shiny then table.insert(mutParts, "Shiny") end
         if dynamicStats.Big then table.insert(mutParts, "Big") end
-        if dynamicStats.VariantSeed then 
-            if #mutParts > 0 then table.insert(mutParts, "+ " .. tostring(dynamicStats.VariantSeed))
-            else table.insert(mutParts, "Seed: " .. tostring(dynamicStats.VariantSeed)) end
-        end
         if #mutParts > 0 then
             table.insert(embedFields, {["name"]="🧬 Mutation", ["value"]="**"..table.concat(mutParts, " ").."**", ["inline"]=true})
         end
